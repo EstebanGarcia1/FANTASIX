@@ -25,7 +25,7 @@ const TABS: LeaderboardTab[] = [
 export function LeaderboardTabs({ activeTab, onTabChange }: LeaderboardTabsProps) {
   return (
     <div className="border-b border-gray-200 dark:border-gray-700">
-      <nav className="-mb-px flex space-x-8">
+      <nav className="-mb-px flex space-x-8" role="tablist">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
           const isDisabled = !tab.enabled;
@@ -35,8 +35,12 @@ export function LeaderboardTabs({ activeTab, onTabChange }: LeaderboardTabsProps
               key={tab.id}
               onClick={() => tab.enabled && onTabChange(tab.id)}
               disabled={isDisabled}
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={`${tab.id}-panel`}
+              aria-label={`${tab.name}${tab.badge ? ` - ${tab.badge}` : ''}`}
               className={clsx(
-                'flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors',
+                'flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 rounded-t-md',
                 isActive && !isDisabled && [
                   'border-brand-500 text-brand-600 dark:text-brand-400',
                 ],

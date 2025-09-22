@@ -1,3 +1,5 @@
+// src/shared/api/hooks.ts - Updated with profile hooks
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import httpClient from './http';
 import type {
@@ -12,6 +14,21 @@ import type {
   MatchFilters,
 } from '../../entities/types';
 
+// Import profile types and functions
+import { 
+  fetchUserProfile, 
+  fetchRewardsStatus, 
+  claimDailyReward,
+  updateUsername,
+  updateAvatar
+} from '../../entities/rewards/api';
+import type { 
+  UserProfile,
+  RewardsStatus,
+  UpdateUsernameRequest, 
+  UpdateAvatarRequest 
+} from '../../entities/profile/types';
+
 // Query Keys
 export const queryKeys = {
   config: ['config'] as const,
@@ -21,6 +38,7 @@ export const queryKeys = {
   myFantasyTeam: (phase: FantasyPhase) => ['fantasy', 'me', phase] as const,
   leaderboard: (phase?: FantasyPhase, page = 1) => ['leaderboard', phase, page] as const,
   rewards: ['rewards', 'status'] as const,
+  profile: ['profile', 'me'] as const,
 };
 
 // Config
@@ -78,6 +96,8 @@ export function useMatches(filters?: MatchFilters) {
       if (filters?.tournamentId) params.append('tournamentId', filters.tournamentId.toString());
       if (filters?.teamId) params.append('teamId', filters.teamId.toString());
       if (filters?.round) params.append('round', filters.round);
+      if (filters?.page) params.append('page', filters.page.toString());
+      if (filters?.size) params.append('size', filters.size.toString());
 
       const query = params.toString();
       const path = `/api/matches${query ? `?${query}` : ''}`;
@@ -86,43 +106,114 @@ export function useMatches(filters?: MatchFilters) {
       return response.matches;
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchInterval: filters?.scope === 'upcoming' ? 60 * 1000 : false, // Auto-refresh upcoming
   });
 }
 
-// Rewards Status
+// Profile - NEW
+export function useUserProfile() {
+  return useQuery({
+    queryKey: queryKeys.profile,
+    queryFn: fetchUserProfile,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: 1,
+  });
+}
+
+// Rewards Status - UPDATED
 export function useRewardsStatus() {
   return useQuery({
     queryKey: queryKeys.rewards,
-    queryFn: async () => {
-      return await httpClient.get<{
-        canClaim: boolean;
-        lastClaim?: string;
-        dailyStreak: number;
-      }>('/rewards/status');
-    },
-    staleTime: 1 * 60 * 1000, // 1 minute
+    queryFn: fetchRewardsStatus,
+    staleTime: 30 * 1000, // 30 seconds
+    refetchInterval: 60 * 1000, // Refetch every minute
   });
 }
 
-// Claim Daily Reward
+// Claim Daily Reward - UPDATED
 export function useClaimDailyReward() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async () => {
-      return await httpClient.post<{
-        message: string;
-        siegePoints: number;
-        dailyStreak: number;
-      }>('/rewards/claim-daily');
-    },
-    onSuccess: () => {
-      // Invalidate rewards and user data
+    mutationFn: claimDailyReward,
+    onSuccess: (data) => {
+      // Invalidate and update related queries
       queryClient.invalidateQueries({ queryKey: queryKeys.rewards });
-      queryClient.invalidateQueries({ queryKey: ['auth', 'me'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile });
+      
+      // Optimistically update user points
+      queryClient.setQueryData(queryKeys.profile, (oldData: UserProfile | undefined) => {
+        if (oldData) {
+          return {
+            ...oldData,
+            siegePoints: data.totalSiegePoints,
+          };
+        }
+        return oldData;
+      });
+      
+      // Update rewards status
+      queryClient.setQueryData(queryKeys.rewards, (oldData: RewardsStatus | undefined) => {
+        if (oldData) {
+          return {
+            ...oldData,
+            canClaim: false,
+            dailyStreak: data.dailyStreak,
+            lastClaim: new Date().toISOString(),
+          };
+        }
+        return oldData;
+      });
     },
   });
 }
+
+// Update Username - NEW
+export function useUpdateUsername() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (request: UpdateUsernameRequest) => updateUsername(request),
+    onSuccess: (data) => {
+      // Update user profile with new username
+      queryClient.setQueryData(queryKeys.profile, (oldData: UserProfile | undefined) => {
+        if (oldData) {
+          return {
+            ...oldData,
+            username: data.username,
+            hasChangedUsername: true,
+          };
+        }
+        return oldData;
+      });
+      
+      // Invalidate to ensure fresh data
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile });
+    },
+  });
+}
+
+// Update Avatar - NEW
+export function useUpdateAvatar() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (request: UpdateAvatarRequest) => updateAvatar(request),
+    onSuccess: (data) => {
+      // Update user profile with new avatar URL
+      queryClient.setQueryData(queryKeys.profile, (oldData: UserProfile | undefined) => {
+        if (oldData) {
+          return {
+            ...oldData,
+            profilePicUrl: data.profilePicUrl,
+          };
+        }
+        return oldData;
+      });
+      
+      // Invalidate to ensure fresh data
+      queryClient.invalidateQueries({ queryKey: queryKeys.profile });
+    },
   });
 }
 
@@ -143,7 +234,15 @@ export function useSubmitFantasyTeam() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ phase, players }: { phase: FantasyPhase; players: string[] }) => {
+    mutationFn: async ({ 
+      phase, 
+      players, 
+      allPlayers 
+    }: { 
+      phase: FantasyPhase; 
+      players: string[];
+      allPlayers: Player[];
+    }) => {
       return await httpClient.post('/fantasy/submit-team', { phase, players });
     },
     onSuccess: (_, variables) => {
@@ -169,4 +268,5 @@ export function useLeaderboard(phase?: FantasyPhase, page = 1) {
       return response.leaderboard;
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
-  
+  });
+}

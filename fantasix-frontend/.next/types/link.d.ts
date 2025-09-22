@@ -33,12 +33,13 @@ declare namespace __next_route_internal_types__ {
     | `/auth`
     | `/app`
     | `/app/admin`
-    | `/app/matches`
-    | `/app/draft`
     | `/app/leaderboard`
-    | `/app/players`
+    | `/app/draft`
+    | `/app/matches`
     | `/app/profile`
-  type DynamicRoutes<T extends string = string> = never
+    | `/app/players`
+  type DynamicRoutes<T extends string = string> = 
+    | `/app/players/${SafeSlug<T>}`
 
   type RouteImpl<T> = 
     | StaticRoutes

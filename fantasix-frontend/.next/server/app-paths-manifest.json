@@ -1,4 +1,4 @@
 {
-  "/(public)/auth/page": "app/(public)/auth/page.js",
-  "/(public)/page": "app/(public)/page.js"
+  "/(public)/page": "app/(public)/page.js",
+  "/(public)/auth/page": "app/(public)/auth/page.js"
 }

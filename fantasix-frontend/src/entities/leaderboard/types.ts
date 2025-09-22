@@ -53,3 +53,46 @@ export interface LeaderboardTab {
 }
 
 export type LeaderboardType = 'global' | 'my-league';
+
+// Utility types for API responses
+export interface LeaderboardApiResponse {
+  leaderboard: Array<{
+    user: { username: string; profilePicUrl?: string };
+    phase: string;
+    totalPoints: number;
+  }>;
+  page: number;
+  limit: number;
+  total: number;
+  me?: {
+    user: { username: string; profilePicUrl?: string };
+    phase: string;
+    totalPoints: number;
+    position: number;
+  };
+}
+
+export interface UserTeamApiResponse {
+  team: {
+    userId: string;
+    phase: string;
+    players: Array<{
+      id: number;
+      nickname: string;
+      role?: string;
+      imageUrl?: string;
+      totalPoints: number;
+      Team?: {
+        id: number;
+        name: string;
+        logoUrl: string;
+      };
+    }>;
+    pointsTotal: number;
+    createdAt: string;
+  };
+  user: {
+    username: string;
+    profilePicUrl?: string;
+  };
+}
